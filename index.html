@@ -57,6 +57,24 @@
       </section>
 
       <div id="scanWorkspace" hidden>
+        <section class="card scanner" aria-labelledby="scan-title">
+          <h2 id="scan-title">สแกน</h2>
+          <div id="reader" class="reader"></div>
+          <div class="scanner-actions scanner-actions-row">
+            <button type="button" class="btn" id="toggleScan">เริ่มกล้อง</button>
+            <button type="button" class="btn secondary" id="flipCamera" hidden>
+              สลับกล้อง
+            </button>
+          </div>
+          <label class="field">
+            <span>หรือพิมพ์/วางรหัส</span>
+            <div class="row">
+              <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" />
+              <button type="button" class="btn secondary" id="addManual">เพิ่ม</button>
+            </div>
+          </label>
+        </section>
+
         <div class="card session-banner">
           <div class="session-banner-main">
             <div class="session-banner-text">
@@ -75,24 +93,6 @@
           </div>
           <button type="button" class="btn secondary" id="changeOperatorBtn">เปลี่ยนคน</button>
         </div>
-
-        <section class="card scanner" aria-labelledby="scan-title">
-          <h2 id="scan-title">สแกน</h2>
-          <div id="reader" class="reader"></div>
-          <div class="scanner-actions scanner-actions-row">
-            <button type="button" class="btn" id="toggleScan">เริ่มกล้อง</button>
-            <button type="button" class="btn secondary" id="flipCamera" hidden>
-              สลับกล้อง
-            </button>
-          </div>
-          <label class="field">
-            <span>หรือพิมพ์/วางรหัส</span>
-            <div class="row">
-              <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" />
-              <button type="button" class="btn secondary" id="addManual">เพิ่ม</button>
-            </div>
-          </label>
-        </section>
 
         <section class="card queue" aria-labelledby="queue-title">
           <div class="queue-head">

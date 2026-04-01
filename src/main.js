@@ -249,8 +249,8 @@ function getHtml5QrFactoryConfig() {
   return {
     verbose: false,
     useBarCodeDetectorIfSupported: false,
+    /** เน้น Code 128 / บาร์โค้ด 1D ก่อน แล้วค่อย QR — ลำดับช่วยตัวถอดรหัสบน iOS */
     formatsToSupport: [
-      Html5QrcodeSupportedFormats.QR_CODE,
       Html5QrcodeSupportedFormats.CODE_128,
       Html5QrcodeSupportedFormats.EAN_13,
       Html5QrcodeSupportedFormats.EAN_8,
@@ -260,37 +260,40 @@ function getHtml5QrFactoryConfig() {
       Html5QrcodeSupportedFormats.UPC_E,
       Html5QrcodeSupportedFormats.ITF,
       Html5QrcodeSupportedFormats.CODABAR,
+      Html5QrcodeSupportedFormats.QR_CODE,
       Html5QrcodeSupportedFormats.DATA_MATRIX,
       Html5QrcodeSupportedFormats.PDF_417,
     ],
   };
 }
 
+/**
+ * Code 128 เป็นแถบแนวนอน — ต้องให้กรอบสแกนกว้างและเตี้ย ไม่ใช่กล่องจัตุรัสแบบ QR อย่างเดียว
+ * (ใช้ร่วมกับได้ทั้ง QR ที่อยู่ในแถบกลางภาพ)
+ */
+function getQrBoxBarcodeFriendly(viewfinderWidth, viewfinderHeight) {
+  const boxW = Math.min(
+    Math.floor(viewfinderWidth * 0.94),
+    viewfinderWidth - 16
+  );
+  const hByWidth = Math.floor(boxW * 0.22);
+  const hByVideo = Math.floor(viewfinderHeight * 0.36);
+  const boxH = Math.min(Math.max(hByWidth, 72), hByVideo, Math.floor(viewfinderHeight * 0.42));
+  return {
+    width: Math.max(220, boxW),
+    height: Math.max(72, boxH),
+  };
+}
+
 function getScanConfig() {
   const isApple = isAppleTouchDevice();
-  const vw = window.innerWidth || 360;
-  const w = Math.min(320, Math.max(200, Math.floor(vw * 0.88)));
-  const h = Math.min(220, Math.max(120, Math.floor(w * 0.62)));
-
-  if (isApple) {
-    return {
-      fps: 15,
-      aspectRatio: 1.777777778,
-      disableFlip: true,
-      /** พื้นที่สแกนตามขนาดวิดีโอจริง — กล่องเล็กเกินบน iPhone มักถอดไม่ติด */
-      qrbox: (viewfinderWidth, viewfinderHeight) => {
-        const maxW = Math.floor(Math.min(viewfinderWidth, viewfinderHeight * 1.35) * 0.92);
-        const boxW = Math.max(200, Math.min(maxW, viewfinderWidth - 16));
-        const boxH = Math.min(
-          Math.max(110, Math.floor(boxW * 0.55)),
-          Math.floor(viewfinderHeight * 0.48)
-        );
-        return { width: boxW, height: boxH };
-      },
-    };
-  }
-
-  return { fps: 10, qrbox: { width: w, height: h } };
+  return {
+    fps: isApple ? 16 : 12,
+    ...(isApple
+      ? { aspectRatio: 1.777777778, disableFlip: false }
+      : {}),
+    qrbox: getQrBoxBarcodeFriendly,
+  };
 }
 
 async function ensureCameraList() {
