@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>สแกนบาร์โค้ด — คิวแล้วค่อยส่ง</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="header-row">
+          <div class="header-titles">
+            <h1>สแกนบาร์โค้ด</h1>
+            <p class="subtitle">เก็บในเครื่องก่อน กดส่งเมื่อพร้อม</p>
+          </div>
+          <button
+            type="button"
+            class="btn nav-menu-btn"
+            id="navMenuBtn"
+            aria-expanded="false"
+            aria-haspopup="true"
+            aria-controls="navMenuPanel"
+          >
+            เมนู
+          </button>
+        </div>
+        <div id="navMenuPanel" class="nav-menu-panel" hidden>
+          <nav class="nav-menu-links" aria-label="เมนูหลัก">
+            <a href="index.html" class="nav-menu-link" data-nav="scan">สแกน</a>
+            <a href="settings.html" class="nav-menu-link" data-nav="settings">ตั้งค่า</a>
+          </nav>
+        </div>
+      </header>
+
+      <section class="card scanner" aria-labelledby="scan-title">
+        <h2 id="scan-title">สแกน</h2>
+        <div id="reader" class="reader"></div>
+        <div class="scanner-actions scanner-actions-row">
+          <button type="button" class="btn" id="toggleScan">เริ่มกล้อง</button>
+          <button type="button" class="btn secondary" id="flipCamera" hidden>
+            สลับกล้อง
+          </button>
+        </div>
+        <label class="field">
+          <span>หรือพิมพ์/วางรหัส</span>
+          <div class="row">
+            <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" />
+            <button type="button" class="btn secondary" id="addManual">เพิ่ม</button>
+          </div>
+        </label>
+      </section>
+
+      <section class="card queue" aria-labelledby="queue-title">
+        <div class="queue-head">
+          <h2 id="queue-title">รายการรอส่ง</h2>
+          <span class="badge" id="pendingCount">0</span>
+        </div>
+        <div class="queue-actions">
+          <button type="button" class="btn primary" id="sendNow" disabled>ส่งทั้งหมดที่รอส่ง</button>
+          <button type="button" class="btn danger ghost" id="clearSent">ล้างรายการที่ส่งแล้ว</button>
+        </div>
+        <p class="hint" id="syncStatus" role="status"></p>
+        <ul class="queue-list" id="queueList"></ul>
+      </section>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

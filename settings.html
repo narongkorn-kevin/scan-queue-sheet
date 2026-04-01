@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>ตั้งค่า — สแกนบาร์โค้ด</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="header-row">
+          <div class="header-titles">
+            <h1>ตั้งค่า</h1>
+            <p class="subtitle">เชื่อม Google Sheet</p>
+          </div>
+          <button
+            type="button"
+            class="btn nav-menu-btn"
+            id="navMenuBtn"
+            aria-expanded="false"
+            aria-haspopup="true"
+            aria-controls="navMenuPanel"
+          >
+            เมนู
+          </button>
+        </div>
+        <div id="navMenuPanel" class="nav-menu-panel" hidden>
+          <nav class="nav-menu-links" aria-label="เมนูหลัก">
+            <a href="index.html" class="nav-menu-link" data-nav="scan">สแกน</a>
+            <a href="settings.html" class="nav-menu-link" data-nav="settings">ตั้งค่า</a>
+          </nav>
+        </div>
+      </header>
+
+      <section class="card settings" aria-labelledby="settings-title">
+        <h2 id="settings-title">การเชื่อม Google Sheet</h2>
+        <label class="field">
+          <span>URL Web App (จาก Google Apps Script)</span>
+          <input
+            id="webAppUrl"
+            type="url"
+            placeholder="https://script.google.com/macros/s/.../exec"
+            autocomplete="off"
+          />
+        </label>
+        <label class="field">
+          <span>โทเคน (ถ้าตั้งใน Apps Script — ไม่บังคับ)</span>
+          <input id="syncToken" type="password" placeholder="เว้นว่างได้" autocomplete="off" />
+        </label>
+        <button type="button" class="btn secondary" id="saveSettings">บันทึกการตั้งค่า</button>
+        <p class="hint" id="settingsHint" role="status"></p>
+      </section>
+    </div>
+    <script type="module" src="/src/settings-page.js"></script>
+  </body>
+</html>
