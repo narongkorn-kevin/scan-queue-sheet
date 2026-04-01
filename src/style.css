@@ -219,15 +219,27 @@ select:focus {
   min-width: min(100%, 8rem);
 }
 
-.reader {
+/* พรีวิวกล้องแนวนอน ความสูงพอสำหรับบาร์/QR — ไม่ดึงเต็มจอสูง */
+.card.scanner .reader {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+  aspect-ratio: 16 / 9;
+  max-height: min(200px, 32dvh, 55vw);
   border-radius: 8px;
   overflow: hidden;
   background: #000;
-  min-height: 200px;
 }
 
-.reader video {
-  width: 100%;
+.card.scanner .reader video {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  object-fit: cover;
+  object-position: center;
   display: block;
 }
 

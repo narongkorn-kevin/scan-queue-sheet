@@ -88,6 +88,35 @@ function getCurrentScanCategory() {
   return String(scanCategory?.value || '').trim();
 }
 
+/** @type {string} */
+let lastManualPrefill = '';
+
+function getManualPrefillForCategory(category) {
+  const cat = String(category || '').trim().toUpperCase();
+  if (cat === 'NB' || cat === 'CM') return `IT${cat}`;
+  if (cat === 'MN1' || cat === 'MN2') return 'ITMN';
+  if (cat === 'UPS') return 'UPS';
+  return '';
+}
+
+function applyManualPrefill({ force = false } = {}) {
+  if (!manualCode) return;
+  const next = getManualPrefillForCategory(getCurrentScanCategory());
+  const cur = String(manualCode.value || '').trim();
+
+  // ไม่ทับค่าที่ผู้ใช้กำลังพิมพ์เอง เว้นแต่ช่องว่าง/เป็นค่าที่ระบบเติมไว้
+  if (force || cur === '' || cur === lastManualPrefill) {
+    manualCode.value = next;
+    // วางเคอร์เซอร์ท้ายสุดเพื่อให้พิมพ์ต่อได้ทันที
+    try {
+      manualCode.setSelectionRange(manualCode.value.length, manualCode.value.length);
+    } catch {
+      /* ignore */
+    }
+  }
+  lastManualPrefill = next;
+}
+
 async function refreshQueue() {
   if (!activeSession) {
     pendingForUnload = 0;
@@ -285,21 +314,24 @@ function getQrBoxBarcodeFriendly(viewfinderWidth, viewfinderHeight) {
   };
 }
 
+/** พรีวิวแนวนอน — สอดคล้องกับกล่อง .reader (16:9) และลดความสูงบนจอตั้ง */
+const SCANNER_ASPECT_RATIO = 16 / 9;
+
 function getScanConfig() {
   const isApple = isAppleTouchDevice();
   return {
     fps: isApple ? 16 : 12,
-    ...(isApple
-      ? { aspectRatio: 1.777777778, disableFlip: false }
-      : {}),
+    aspectRatio: SCANNER_ASPECT_RATIO,
+    ...(isApple ? { disableFlip: false } : {}),
     qrbox: getQrBoxBarcodeFriendly,
   };
 }
 
-/** ขอสตรีมละเอียดขึ้น — ใช้ ideal เพื่อไม่บังคับจน getUserMedia ล้มบนกล้องเก่า */
+/** ขอสตรีมละเอียด + สัดส่วนแนวนอน — ideal เพื่อลดโอกาส getUserMedia ล้ม */
 const SCANNER_VIDEO_IDEAL = {
   width: { ideal: 1920 },
   height: { ideal: 1080 },
+  aspectRatio: { ideal: SCANNER_ASPECT_RATIO },
 };
 
 /**
@@ -597,6 +629,7 @@ startSessionBtn.addEventListener('click', () => {
   }
   updateSessionBanner();
   showWorkspace();
+  applyManualPrefill({ force: true });
   void refreshQueue();
 });
 
@@ -762,17 +795,21 @@ flipCameraBtn?.addEventListener('click', async () => {
 });
 
 addManual.addEventListener('click', async () => {
-  await enqueueBarcode(manualCode.value);
-  manualCode.value = '';
+  await enqueueBarcode(String(manualCode.value || '').toUpperCase());
+  applyManualPrefill({ force: true });
   manualCode.focus();
 });
 
 manualCode.addEventListener('keydown', async (ev) => {
   if (ev.key === 'Enter') {
     ev.preventDefault();
-    await enqueueBarcode(manualCode.value);
-    manualCode.value = '';
+    await enqueueBarcode(String(manualCode.value || '').toUpperCase());
+    applyManualPrefill({ force: true });
   }
+});
+
+scanCategory?.addEventListener('change', () => {
+  applyManualPrefill({ force: false });
 });
 
 window.addEventListener('beforeunload', (e) => {
