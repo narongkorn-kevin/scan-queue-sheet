@@ -1,4 +1,4 @@
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   addScan,
   getScansForSession,
@@ -226,10 +226,70 @@ function shouldAcceptScan(value) {
   return true;
 }
 
+/**
+ * iPhone / iPad รวม Chrome, Edge, Firefox บน iOS — ทุกตัวใช้ WebKit เหมือน Safari
+ * กฎกล้อง (ต้อง HTTPS, facingMode) เหมือนกันหมด
+ */
+function isAppleTouchDevice() {
+  const ua = navigator.userAgent || '';
+  return (
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+    /(CriOS|EdgiOS|FxiOS)/.test(ua)
+  );
+}
+
+/**
+ * บน iOS ให้ใช้ตัวถอดรหัส ZXing ของไลบรารีเท่านั้น — BarcodeDetector ของเว็บมักถอดไม่ได้แต่ความจริงแล้วยังบางครั้ง
+ */
+function getHtml5QrFactoryConfig() {
+  if (!isAppleTouchDevice()) {
+    return { verbose: false };
+  }
+  return {
+    verbose: false,
+    useBarCodeDetectorIfSupported: false,
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.CODE_93,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.ITF,
+      Html5QrcodeSupportedFormats.CODABAR,
+      Html5QrcodeSupportedFormats.DATA_MATRIX,
+      Html5QrcodeSupportedFormats.PDF_417,
+    ],
+  };
+}
+
 function getScanConfig() {
+  const isApple = isAppleTouchDevice();
   const vw = window.innerWidth || 360;
   const w = Math.min(320, Math.max(200, Math.floor(vw * 0.88)));
   const h = Math.min(220, Math.max(120, Math.floor(w * 0.62)));
+
+  if (isApple) {
+    return {
+      fps: 15,
+      aspectRatio: 1.777777778,
+      disableFlip: true,
+      /** พื้นที่สแกนตามขนาดวิดีโอจริง — กล่องเล็กเกินบน iPhone มักถอดไม่ติด */
+      qrbox: (viewfinderWidth, viewfinderHeight) => {
+        const maxW = Math.floor(Math.min(viewfinderWidth, viewfinderHeight * 1.35) * 0.92);
+        const boxW = Math.max(200, Math.min(maxW, viewfinderWidth - 16));
+        const boxH = Math.min(
+          Math.max(110, Math.floor(boxW * 0.55)),
+          Math.floor(viewfinderHeight * 0.48)
+        );
+        return { width: boxW, height: boxH };
+      },
+    };
+  }
+
   return { fps: 10, qrbox: { width: w, height: h } };
 }
 
@@ -276,22 +336,59 @@ async function runScanner(cameraIdOrConfig) {
     },
     () => {}
   );
+  const readerEl = document.getElementById('reader');
+  const video = readerEl?.querySelector('video');
+  if (video) {
+    video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
+    video.playsInline = true;
+  }
 }
 
 async function startCamera() {
   if (scanning) return;
-  html5Qr = new Html5Qrcode('reader');
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('เบราว์เซอร์นี้ไม่รองรับการเข้าถึงกล้อง');
+  }
+  if (!window.isSecureContext) {
+    throw new Error(
+      'ต้องใช้ HTTPS เพื่อเปิดกล้อง — บน iPhone ทั้ง Safari และ Chrome ใช้กฎเดียวกัน เปิดจากลิงก์ https:// เท่านั้น (เช่น npm run dev + plugin SSL) หรือโฮสต์บน Vercel'
+    );
+  }
+
+  html5Qr = new Html5Qrcode('reader', getHtml5QrFactoryConfig());
   await ensureCameraList();
 
   let cameraArg;
-  if (cameraList.length >= 1) {
+  if (isAppleTouchDevice()) {
+    /** iOS: เริ่มด้วย facingMode เสถียรกว่า deviceId หลายเครื่อง */
+    cameraIndex = 0;
+    cameraArg = { facingMode: 'environment' };
+  } else if (cameraList.length >= 1) {
     cameraIndex = pickInitialCameraIndex(cameraList);
     cameraArg = cameraList[cameraIndex].id;
   } else {
     cameraArg = { facingMode: 'environment' };
   }
 
-  await runScanner(cameraArg);
+  try {
+    await runScanner(cameraArg);
+  } catch (firstErr) {
+    if (
+      isAppleTouchDevice() &&
+      cameraList.length >= 1 &&
+      typeof cameraArg === 'object' &&
+      cameraArg !== null &&
+      'facingMode' in cameraArg
+    ) {
+      cameraIndex = pickInitialCameraIndex(cameraList);
+      cameraArg = cameraList[cameraIndex].id;
+      await runScanner(cameraArg);
+    } else {
+      throw firstErr;
+    }
+  }
+
   scanning = true;
   toggleScan.textContent = 'หยุดกล้อง';
   updateFlipCameraUi();

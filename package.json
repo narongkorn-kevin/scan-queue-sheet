@@ -12,6 +12,7 @@
     "html5-qrcode": "^2.3.8"
   },
   "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
     "vite": "^6.2.0"
   }
 }
