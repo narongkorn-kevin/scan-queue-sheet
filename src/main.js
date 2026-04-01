@@ -296,6 +296,36 @@ function getScanConfig() {
   };
 }
 
+/** ขอสตรีมละเอียดขึ้น — ใช้ ideal เพื่อไม่บังคับจน getUserMedia ล้มบนกล้องเก่า */
+const SCANNER_VIDEO_IDEAL = {
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+};
+
+/**
+ * รวมการเลือกกล้องกับความละเอียด (ส่งเป็น videoConstraints ของ html5-qrcode)
+ * @param {string | { facingMode?: string | { exact: string }; deviceId?: string | { exact: string } }} cameraIdOrConfig
+ */
+function buildScannerVideoConstraints(cameraIdOrConfig) {
+  const res = SCANNER_VIDEO_IDEAL;
+  if (typeof cameraIdOrConfig === 'string') {
+    return { deviceId: { exact: cameraIdOrConfig }, ...res };
+  }
+  if (cameraIdOrConfig && typeof cameraIdOrConfig === 'object') {
+    if ('facingMode' in cameraIdOrConfig) {
+      return { facingMode: cameraIdOrConfig.facingMode, ...res };
+    }
+    if ('deviceId' in cameraIdOrConfig) {
+      const d = cameraIdOrConfig.deviceId;
+      if (typeof d === 'string') {
+        return { deviceId: { exact: d }, ...res };
+      }
+      return { deviceId: d, ...res };
+    }
+  }
+  return { facingMode: 'environment', ...res };
+}
+
 async function ensureCameraList() {
   try {
     const cams = await Html5Qrcode.getCameras();
@@ -329,7 +359,10 @@ function updateFlipCameraUi() {
 
 async function runScanner(cameraIdOrConfig) {
   if (!html5Qr) return;
-  const config = getScanConfig();
+  const config = {
+    ...getScanConfig(),
+    videoConstraints: buildScannerVideoConstraints(cameraIdOrConfig),
+  };
   await html5Qr.start(
     cameraIdOrConfig,
     config,
