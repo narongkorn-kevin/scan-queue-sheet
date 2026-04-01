@@ -1,15 +1,28 @@
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   addScan,
-  getAllScans,
+  getScansForSession,
   deleteScan,
   updateScan,
   clearSent,
+  deleteScansBySession,
 } from './db.js';
 import { getStoredWebAppUrl, getStoredSyncToken } from './settings-store.js';
 import { initAppNav } from './nav.js';
+import { playScanBeep, primeScanSound } from './scan-sound.js';
 
 const $ = (id) => document.getElementById(id);
+
+const sessionGate = $('sessionGate');
+const scanWorkspace = $('scanWorkspace');
+const operatorName = $('operatorName');
+const startSessionBtn = $('startSessionBtn');
+const changeOperatorBtn = $('changeOperatorBtn');
+const sessionSummaryName = $('sessionSummaryName');
+const scanCategory = $('scanCategory');
+const historyHint = $('historyHint');
+const historyList = $('historyList');
+const gateStatus = $('gateStatus');
 
 const toggleScan = $('toggleScan');
 const flipCameraBtn = $('flipCamera');
@@ -21,18 +34,23 @@ const queueList = $('queueList');
 const pendingCount = $('pendingCount');
 const syncStatus = $('syncStatus');
 
+/** @type {{ sessionId: string; name: string } | null} */
+let activeSession = null;
+
 let html5Qr = null;
 let scanning = false;
 /** @type {{ id: string; label: string }[]} */
 let cameraList = [];
-/** ดัชนีกล้องที่ใช้อยู่ใน cameraList */
 let cameraIndex = 0;
 /** @type {string | null} */
 let lastScanValue = null;
 let lastScanAt = 0;
 const DEBOUNCE_MS = 1200;
-/** ใช้เตือนก่อนปิดแท็บเมื่อยังมีรายการรอส่ง */
 let pendingForUnload = 0;
+
+/** @type {AbortController | null} */
+let historyAbort = null;
+let historyDebounceTimer = 0;
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -41,17 +59,45 @@ function newId() {
 function formatTime(iso) {
   try {
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso || '');
     return d.toLocaleString('th-TH', {
       dateStyle: 'short',
-      timeStyle: 'medium',
+      timeStyle: 'short',
     });
   } catch {
-    return iso;
+    return String(iso || '');
   }
 }
 
+function showGate() {
+  sessionGate.hidden = false;
+  scanWorkspace.hidden = true;
+}
+
+function showWorkspace() {
+  sessionGate.hidden = true;
+  scanWorkspace.hidden = false;
+}
+
+function updateSessionBanner() {
+  if (!activeSession) return;
+  sessionSummaryName.textContent = activeSession.name;
+}
+
+function getCurrentScanCategory() {
+  return String(scanCategory?.value || '').trim();
+}
+
 async function refreshQueue() {
-  const rows = await getAllScans();
+  if (!activeSession) {
+    pendingForUnload = 0;
+    pendingCount.textContent = '0';
+    sendNow.disabled = true;
+    queueList.innerHTML = '';
+    return;
+  }
+
+  const rows = await getScansForSession(activeSession.sessionId);
   rows.sort((a, b) => (a.scannedAt < b.scannedAt ? 1 : -1));
 
   const pending = rows.filter((r) => r.status === 'pending');
@@ -66,6 +112,7 @@ async function refreshQueue() {
     li.className = 'queue-item';
     li.innerHTML = `
       <div class="queue-meta">
+        <div class="queue-cat"></div>
         <div class="queue-code"></div>
         <div class="queue-time"></div>
         ${row.error ? `<div class="hint error" style="margin-top:0.25rem">${escapeHtml(row.error)}</div>` : ''}
@@ -75,6 +122,11 @@ async function refreshQueue() {
         <div class="queue-item-actions"></div>
       </div>
     `;
+    const catEl = li.querySelector('.queue-cat');
+    if (catEl) {
+      catEl.textContent = row.category || '—';
+      catEl.className = 'queue-cat';
+    }
     li.querySelector('.queue-code').textContent = row.barcode;
     li.querySelector('.queue-time').textContent = formatTime(row.scannedAt);
     const pill = li.querySelector('.status-pill');
@@ -119,16 +171,48 @@ function escapeHtml(s) {
 }
 
 async function enqueueBarcode(text) {
+  if (!activeSession) {
+    return;
+  }
+
   const trimmed = String(text || '').trim();
   if (!trimmed) return;
+
+  const cat = getCurrentScanCategory();
+  if (!cat) {
+    syncStatus.textContent = 'กรุณาเลือก Category ด้านบนก่อนสแกน';
+    syncStatus.classList.add('error');
+    return;
+  }
+
+  const sessionRows = await getScansForSession(activeSession.sessionId);
+  const dup = sessionRows.some(
+    (r) =>
+      (r.status === 'pending' || r.status === 'failed') &&
+      String(r.barcode || '').trim() === trimmed
+  );
+  if (dup) {
+    syncStatus.textContent = `แจ้งเตือน: รหัส "${trimmed}" มีในรายการแล้ว (สแกนซ้ำ)`;
+    syncStatus.classList.remove('ok');
+    syncStatus.classList.add('error');
+    return;
+  }
+
+  primeScanSound();
 
   const row = {
     id: newId(),
     barcode: trimmed,
     scannedAt: new Date().toISOString(),
     status: /** @type {'pending'} */ ('pending'),
+    sessionId: activeSession.sessionId,
+    operatorName: activeSession.name,
+    category: cat,
   };
   await addScan(row);
+  playScanBeep();
+  syncStatus.textContent = '';
+  syncStatus.classList.remove('error', 'ok');
   await refreshQueue();
 }
 
@@ -243,6 +327,171 @@ async function postToAppsScript(url, body) {
   return json;
 }
 
+const HISTORY_WIDE_CATS = ['NB', 'CM', 'MN1', 'MN2', 'UPS'];
+
+/**
+ * แปลง response ประวัติเป็นรายการแสดงผล — รองรับทั้งแบบ wide (แถวเดียวหลายคอลัมน์) และแบบเก่า
+ * @param {unknown[]} rows
+ */
+function historyRowsToDisplayEntries(rows) {
+  /** @type {{ category: string; barcode: string; receivedAt: string }[]} */
+  const out = [];
+  for (const raw of rows) {
+    const r = /** @type {Record<string, unknown>} */ (raw || {});
+    const isWide =
+      r.NB != null ||
+      r.CM != null ||
+      r.MN1 != null ||
+      r.MN2 != null ||
+      r.UPS != null ||
+      r.created_at != null;
+
+    if (isWide) {
+      const ts = String(r.updated_at || r.created_at || '');
+      for (const c of HISTORY_WIDE_CATS) {
+        const code = r[c];
+        if (code != null && String(code).trim() !== '') {
+          out.push({
+            category: c,
+            barcode: String(code).trim(),
+            receivedAt: ts,
+          });
+        }
+      }
+    } else if (r.barcode != null && String(r.barcode).trim() !== '') {
+      out.push({
+        category: String(r.category || '—'),
+        barcode: String(r.barcode).trim(),
+        receivedAt: String(r.receivedAt || ''),
+      });
+    }
+  }
+  out.sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt)));
+  return out;
+}
+
+async function runHistoryFetch() {
+  if (!historyHint || !historyList) return;
+  historyAbort?.abort();
+  historyAbort = new AbortController();
+  const signal = historyAbort.signal;
+
+  const name = operatorName.value.trim();
+  if (name.length < 1) {
+    historyList.innerHTML = '';
+    historyHint.textContent = 'กรอกชื่อแล้วรอสักครู่ ระบบจะดึงแถวที่เคย sync ไว้';
+    return;
+  }
+
+  const url = getStoredWebAppUrl().trim();
+  if (!url) {
+    historyList.innerHTML = '';
+    historyHint.textContent = 'ตั้งค่า URL Web App ในหน้าตั้งค่าก่อน จึงจะดูประวัติได้';
+    return;
+  }
+
+  historyHint.textContent = 'กำลังโหลดประวัติ…';
+  historyList.innerHTML = '';
+
+  try {
+    const token = getStoredSyncToken().trim() || undefined;
+    const res = await fetch(url, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'history', token, name }),
+      signal,
+    });
+    const text = await res.text();
+    const json = JSON.parse(text);
+    if (!json.ok) {
+      throw new Error(json.error || 'โหลดประวัติไม่สำเร็จ');
+    }
+    const rows = json.rows || [];
+    const entries = historyRowsToDisplayEntries(rows);
+    if (entries.length === 0) {
+      historyHint.textContent = 'ยังไม่มีข้อมูลชื่อนี้ใน Sheet';
+      return;
+    }
+    historyHint.textContent = `ข้อมูลใน Sheet: ${entries.length} ช่องหมวดที่มีบาร์โค้ด`;
+    for (const ent of entries) {
+      const li = document.createElement('li');
+      const cat = document.createElement('span');
+      cat.className = 'history-cat';
+      cat.textContent = ent.category || '—';
+      const code = document.createElement('span');
+      code.className = 'history-code';
+      code.textContent = ent.barcode || '';
+      const meta = document.createElement('span');
+      meta.className = 'history-meta';
+      meta.textContent =
+        formatTime(ent.receivedAt) || String(ent.receivedAt || '') || '';
+      li.appendChild(cat);
+      li.appendChild(code);
+      li.appendChild(meta);
+      historyList.appendChild(li);
+    }
+  } catch (e) {
+    if (signal.aborted || e.name === 'AbortError') return;
+    const msg = e instanceof Error ? e.message : String(e);
+    historyHint.textContent = msg;
+  }
+}
+
+function scheduleHistoryFetch() {
+  window.clearTimeout(historyDebounceTimer);
+  historyDebounceTimer = window.setTimeout(() => {
+    void runHistoryFetch();
+  }, 450);
+}
+
+startSessionBtn.addEventListener('click', () => {
+  if (gateStatus) {
+    gateStatus.textContent = '';
+    gateStatus.classList.remove('error', 'ok');
+  }
+  const name = operatorName.value.trim();
+  if (!name) {
+    if (gateStatus) {
+      gateStatus.textContent = 'กรุณากรอกชื่อ';
+      gateStatus.classList.add('error');
+    }
+    return;
+  }
+  activeSession = { sessionId: newId(), name };
+  if (scanCategory) {
+    scanCategory.value = 'NB';
+  }
+  updateSessionBanner();
+  showWorkspace();
+  void refreshQueue();
+});
+
+changeOperatorBtn.addEventListener('click', async () => {
+  if (!activeSession) return;
+  const rows = await getScansForSession(activeSession.sessionId);
+  const pending = rows.filter((r) => r.status === 'pending');
+  if (
+    pending.length > 0 &&
+    !window.confirm(
+      `ยังมี ${pending.length} รายการที่ยังไม่ได้ส่ง ต้องการเปลี่ยนคนและล้างคิวในครั้งนี้หรือไม่?`
+    )
+  ) {
+    return;
+  }
+  await stopCamera();
+  await deleteScansBySession(activeSession.sessionId);
+  activeSession = null;
+  showGate();
+  if (gateStatus) {
+    gateStatus.textContent = '';
+    gateStatus.classList.remove('error', 'ok');
+  }
+  await refreshQueue();
+});
+
+operatorName.addEventListener('input', scheduleHistoryFetch);
+
 sendNow.addEventListener('click', async () => {
   const url = getStoredWebAppUrl().trim();
   if (!url) {
@@ -250,8 +499,9 @@ sendNow.addEventListener('click', async () => {
     syncStatus.classList.add('error');
     return;
   }
+  if (!activeSession) return;
 
-  const rows = await getAllScans();
+  const rows = await getScansForSession(activeSession.sessionId);
   const pending = rows.filter((r) => r.status === 'pending');
   if (pending.length === 0) return;
 
@@ -260,13 +510,24 @@ sendNow.addEventListener('click', async () => {
   syncStatus.classList.remove('error', 'ok');
 
   const token = getStoredSyncToken().trim() || undefined;
+  const sid = activeSession.sessionId;
+  /** รายการเก่าในเครื่องอาจไม่มี category — ใช้ค่าจาก dropdown หรือ NB */
+  const categoryFallback = getCurrentScanCategory() || 'NB';
   const payload = {
     token,
-    rows: pending.map((r) => ({
-      id: r.id,
-      barcode: r.barcode,
-      scannedAt: r.scannedAt,
-    })),
+    session: {
+      name: activeSession.name,
+      category: categoryFallback,
+    },
+    rows: pending.map((r) => {
+      const cat = String(r.category || '').trim() || categoryFallback;
+      return {
+        id: r.id,
+        barcode: r.barcode,
+        scannedAt: r.scannedAt,
+        category: cat,
+      };
+    }),
   };
 
   try {
@@ -274,8 +535,20 @@ sendNow.addEventListener('click', async () => {
     for (const r of pending) {
       await updateScan({ ...r, status: 'sent', error: undefined });
     }
-    syncStatus.textContent = `ส่งสำเร็จ ${pending.length} รายการ`;
+    const okMsg = `ส่งสำเร็จ ${pending.length} รายการ — กรอกข้อมูลคนถัดไป`;
+    syncStatus.textContent = okMsg;
     syncStatus.classList.add('ok');
+    await deleteScansBySession(sid);
+    await stopCamera();
+    activeSession = null;
+    operatorName.value = '';
+    showGate();
+    if (gateStatus) {
+      gateStatus.textContent = okMsg;
+      gateStatus.classList.remove('error');
+      gateStatus.classList.add('ok');
+    }
+    scheduleHistoryFetch();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     for (const r of pending) {
@@ -289,7 +562,8 @@ sendNow.addEventListener('click', async () => {
 });
 
 clearSentBtn.addEventListener('click', async () => {
-  const n = await clearSent();
+  const sid = activeSession?.sessionId;
+  const n = await clearSent(sid);
   syncStatus.textContent = n ? `ล้างรายการที่ส่งแล้ว ${n} แถว` : 'ไม่มีรายการที่ส่งแล้ว';
   syncStatus.classList.toggle('ok', n > 0);
   syncStatus.classList.toggle('error', false);
@@ -301,6 +575,7 @@ toggleScan.addEventListener('click', async () => {
     if (scanning) {
       await stopCamera();
     } else {
+      primeScanSound();
       await startCamera();
     }
   } catch (e) {
@@ -376,9 +651,12 @@ window.addEventListener('beforeunload', (e) => {
 
 window.addEventListener('storage', (e) => {
   if (e.key === 'scanQueue.webAppUrl' || e.key === 'scanQueue.syncToken') {
-    refreshQueue();
+    void refreshQueue();
+    scheduleHistoryFetch();
   }
 });
 
 initAppNav('scan');
-refreshQueue();
+showGate();
+void refreshQueue();
+scheduleHistoryFetch();

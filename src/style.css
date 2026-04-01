@@ -142,6 +142,21 @@ input:focus {
   outline-offset: 1px;
 }
 
+select {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .row {
   display: flex;
   gap: 0.5rem;
@@ -285,6 +300,13 @@ input:focus {
   min-width: 0;
 }
 
+.queue-cat {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 0.15rem;
+}
+
 .queue-code {
   font-weight: 600;
   word-break: break-all;
@@ -329,4 +351,93 @@ input:focus {
 .queue-item-actions .btn {
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
+}
+
+#startSessionBtn {
+  width: 100%;
+}
+
+.history-block {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.history-title {
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 40vh;
+  overflow: auto;
+  font-size: 0.8rem;
+}
+
+.history-list li {
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  align-items: baseline;
+}
+
+.history-list li:last-child {
+  border-bottom: none;
+}
+
+.history-cat {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.history-code {
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.history-meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+  width: 100%;
+}
+
+.session-banner {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 1rem;
+}
+
+.session-banner-main {
+  flex: 1;
+  min-width: min(100%, 12rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.session-banner-text {
+  min-width: 0;
+}
+
+.session-category-field {
+  margin-bottom: 0;
+}
+
+.field--compact span {
+  font-size: 0.75rem;
+}
+
+.field--compact select {
+  padding: 0.45rem 0.6rem;
+  font-size: 0.95rem;
 }

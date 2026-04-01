@@ -13,7 +13,7 @@
         <div class="header-row">
           <div class="header-titles">
             <h1>สแกนบาร์โค้ด</h1>
-            <p class="subtitle">เก็บในเครื่องก่อน กดส่งเมื่อพร้อม</p>
+            <p class="subtitle">กรอกชื่อก่อน — เปลี่ยน Category ได้ระหว่างสแกน</p>
           </div>
           <button
             type="button"
@@ -34,36 +34,77 @@
         </div>
       </header>
 
-      <section class="card scanner" aria-labelledby="scan-title">
-        <h2 id="scan-title">สแกน</h2>
-        <div id="reader" class="reader"></div>
-        <div class="scanner-actions scanner-actions-row">
-          <button type="button" class="btn" id="toggleScan">เริ่มกล้อง</button>
-          <button type="button" class="btn secondary" id="flipCamera" hidden>
-            สลับกล้อง
-          </button>
-        </div>
+      <section class="card" id="sessionGate" aria-labelledby="gate-title">
+        <h2 id="gate-title">เริ่มงาน</h2>
         <label class="field">
-          <span>หรือพิมพ์/วางรหัส</span>
-          <div class="row">
-            <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" />
-            <button type="button" class="btn secondary" id="addManual">เพิ่ม</button>
-          </div>
+          <span>ชื่อผู้ปฏิบัติงาน</span>
+          <input
+            id="operatorName"
+            type="text"
+            autocomplete="name"
+            placeholder="กรอกชื่อก่อนเริ่มสแกน"
+          />
         </label>
+        <button type="button" class="btn primary" id="startSessionBtn">เริ่มสแกน</button>
+        <p class="hint" id="gateStatus" role="status"></p>
+        <div class="history-block" id="historyBlock">
+          <h3 class="history-title">ประวัติใน Sheet (ตามชื่อที่พิมพ์)</h3>
+          <p class="hint" id="historyHint">กรอกชื่อแล้วรอสักครู่ ระบบจะดึงแถวที่เคย sync ไว้</p>
+          <ul class="history-list" id="historyList" aria-live="polite"></ul>
+        </div>
       </section>
 
-      <section class="card queue" aria-labelledby="queue-title">
-        <div class="queue-head">
-          <h2 id="queue-title">รายการรอส่ง</h2>
-          <span class="badge" id="pendingCount">0</span>
+      <div id="scanWorkspace" hidden>
+        <div class="card session-banner">
+          <div class="session-banner-main">
+            <div class="session-banner-text">
+              <strong id="sessionSummaryName"></strong>
+            </div>
+            <label class="field field--compact session-category-field">
+              <span>Category (เปลี่ยนระหว่างสแกนได้)</span>
+              <select id="scanCategory" aria-label="Category สำหรับรายการที่กำลังสแกน">
+                <option value="NB">NB</option>
+                <option value="CM">CM</option>
+                <option value="MN1">MN1</option>
+                <option value="MN2">MN2</option>
+                <option value="UPS">UPS</option>
+              </select>
+            </label>
+          </div>
+          <button type="button" class="btn secondary" id="changeOperatorBtn">เปลี่ยนคน</button>
         </div>
-        <div class="queue-actions">
-          <button type="button" class="btn primary" id="sendNow" disabled>ส่งทั้งหมดที่รอส่ง</button>
-          <button type="button" class="btn danger ghost" id="clearSent">ล้างรายการที่ส่งแล้ว</button>
-        </div>
-        <p class="hint" id="syncStatus" role="status"></p>
-        <ul class="queue-list" id="queueList"></ul>
-      </section>
+
+        <section class="card scanner" aria-labelledby="scan-title">
+          <h2 id="scan-title">สแกน</h2>
+          <div id="reader" class="reader"></div>
+          <div class="scanner-actions scanner-actions-row">
+            <button type="button" class="btn" id="toggleScan">เริ่มกล้อง</button>
+            <button type="button" class="btn secondary" id="flipCamera" hidden>
+              สลับกล้อง
+            </button>
+          </div>
+          <label class="field">
+            <span>หรือพิมพ์/วางรหัส</span>
+            <div class="row">
+              <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" />
+              <button type="button" class="btn secondary" id="addManual">เพิ่ม</button>
+            </div>
+          </label>
+        </section>
+
+        <section class="card queue" aria-labelledby="queue-title">
+          <div class="queue-head">
+            <h2 id="queue-title">รายการรอส่ง</h2>
+            <span class="badge" id="pendingCount">0</span>
+          </div>
+          <div class="queue-actions">
+            <button type="button" class="btn primary" id="sendNow" disabled>ส่งทั้งหมดที่รอส่ง</button>
+            <button type="button" class="btn danger ghost" id="clearSent">ล้างรายการที่ส่งแล้ว</button>
+          </div>
+          <p class="hint" id="syncStatus" role="status"></p>
+          <ul class="queue-list" id="queueList"></ul>
+        </section>
+      </div>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>
