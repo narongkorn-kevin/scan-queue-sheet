@@ -52,6 +52,9 @@ let pendingForUnload = 0;
 let historyAbort = null;
 let historyDebounceTimer = 0;
 
+/** @type {string} */
+let lastOperatorPrefill = '';
+
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
@@ -72,6 +75,7 @@ function formatTime(iso) {
 function showGate() {
   sessionGate.hidden = false;
   scanWorkspace.hidden = true;
+  void applyOperatorNamePrefill();
 }
 
 function showWorkspace() {
@@ -608,6 +612,40 @@ function scheduleHistoryFetch() {
   historyDebounceTimer = window.setTimeout(() => {
     void runHistoryFetch();
   }, 450);
+}
+
+async function applyOperatorNamePrefill() {
+  if (!operatorName) return;
+  const url = getStoredWebAppUrl().trim();
+  if (!url) return;
+
+  const cur = String(operatorName.value || '').trim();
+  if (cur !== '' && cur !== lastOperatorPrefill) return;
+
+  try {
+    const token = getStoredSyncToken().trim() || undefined;
+    const res = await fetch(url, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'nextRun', token, prefix: 'FL3-' }),
+    });
+    const text = await res.text();
+    const json = JSON.parse(text);
+    if (!json.ok) return;
+    const next = String(json.next || '').trim();
+    if (!next) return;
+    operatorName.value = next;
+    lastOperatorPrefill = next;
+    scheduleHistoryFetch();
+    try {
+      operatorName.setSelectionRange(operatorName.value.length, operatorName.value.length);
+    } catch {
+      /* ignore */
+    }
+  } catch {
+    // ถ้าดึงไม่ได้ก็ไม่บล็อกการใช้งาน
+  }
 }
 
 startSessionBtn.addEventListener('click', () => {

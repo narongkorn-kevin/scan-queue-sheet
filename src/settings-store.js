@@ -3,7 +3,7 @@ export const LS_TOKEN = 'scanQueue.syncToken';
 
 /** URL Web App เริ่มต้น (ใช้เมื่อยังไม่เคยบันทึกในเครื่อง) */
 export const DEFAULT_WEB_APP_URL =
-  'https://script.google.com/macros/s/AKfycbwiVkFmIVbO-NMp_mCu0wvWGgd-0ofpVlG50lRlTtdl0N-eCTGP5inoYC4XdO6PACe0pw/exec';
+  'https://script.google.com/macros/s/AKfycbydXtAC1uB2MgEaCORkgXbXQZRcdFt79qjv7VUAXFBMq7ikFiVJV_DMcLz5WDFNahYr1Q/exec';
 
 export function getStoredWebAppUrl() {
   const saved = localStorage.getItem(LS_URL);

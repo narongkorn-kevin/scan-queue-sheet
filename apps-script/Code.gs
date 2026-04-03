@@ -109,6 +109,42 @@ function handleHistory_(sheet, data) {
   };
 }
 
+function handleNextRun_(sheet, data) {
+  const prefixRaw = String(data.prefix || '').trim();
+  const prefix = prefixRaw === '' ? 'FL3-' : prefixRaw;
+  const targetPrefix = prefix.toLowerCase();
+
+  const last = sheet.getLastRow();
+  if (last < FIRST_DATA_ROW) {
+    return { ok: /** @type {const} */ (true), prefix, next: `${prefix}001`, max: 0 };
+  }
+
+  const colA = sheet
+    .getRange(FIRST_DATA_ROW, 1, last - FIRST_DATA_ROW + 1, 1)
+    .getValues();
+
+  let max = 0;
+  let width = 3;
+  for (let i = 0; i < colA.length; i++) {
+    const raw = String(colA[i][0] || '').trim();
+    if (!raw) continue;
+    const lower = raw.toLowerCase();
+    if (!lower.startsWith(targetPrefix)) continue;
+    const rest = raw.slice(prefix.length).trim();
+    const m = rest.match(/^(\d+)/);
+    if (!m) continue;
+    const numStr = m[1];
+    const num = parseInt(numStr, 10);
+    if (Number.isNaN(num)) continue;
+    if (num > max) max = num;
+    if (numStr.length > width) width = numStr.length;
+  }
+
+  const nextNum = max + 1;
+  const nextStr = String(nextNum).padStart(width, '0');
+  return { ok: /** @type {const} */ (true), prefix, next: `${prefix}${nextStr}`, max };
+}
+
 function doPost(e) {
   const out = ContentService.createTextOutput();
   out.setMimeType(ContentService.MimeType.JSON);
@@ -134,6 +170,12 @@ function doPost(e) {
     if (data.action === 'history') {
       const hist = handleHistory_(sheet, data);
       out.setContent(JSON.stringify(hist));
+      return out;
+    }
+
+    if (data.action === 'nextRun') {
+      const next = handleNextRun_(sheet, data);
+      out.setContent(JSON.stringify(next));
       return out;
     }
 
